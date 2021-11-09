@@ -1,5 +1,6 @@
 import os
 import sys
+import tarfile
 from io import BytesIO
 
 import pytest
@@ -155,6 +156,45 @@ async def test_build_from_tar_stream(docker, random_name, image_name):
         fileobj=tar_obj, encoding="gzip", tag=name, stream=True
     ):
         pass
+    tar_obj.close()
+    image = await docker.images.inspect(name=name)
+    assert image
+
+
+@pytest.mark.asyncio
+async def test_build_from_tar_from_directory(docker, random_name, image_name):
+    name = "{}:latest".format(random_name())
+    dockerfile = f"""
+    # Shared Volume
+    FROM {image_name}
+    COPY test test
+    """
+    f = BytesIO(dockerfile.encode("utf-8"))
+    tar_obj = utils.mktar_from_directory(f, directory="tests/docker/tar")
+    await docker.images.build(fileobj=tar_obj, encoding="gzip", tag=name)
+    tar_obj.seek(0)
+    assert tarfile.open(tar_obj.name, fileobj=tar_obj).getmember("./app.go")
+    tar_obj.close()
+    image = await docker.images.inspect(name=name)
+    assert image
+
+
+@pytest.mark.asyncio
+async def test_build_from_tar_from_directory_stream(docker, random_name, image_name):
+    name = "{}:latest".format(random_name())
+    dockerfile = f"""
+    # Shared Volume
+    FROM {image_name}
+    COPY app.go app.go
+    """
+    f = BytesIO(dockerfile.encode("utf-8"))
+    tar_obj = utils.mktar_from_directory(f, directory="tests/docker/tar")
+    async for item in docker.images.build(
+        fileobj=tar_obj, encoding="gzip", tag=name, stream=True
+    ):
+        pass
+    tar_obj.seek(0)
+    assert tarfile.open(tar_obj.name, fileobj=tar_obj).getmember("./app.go")
     tar_obj.close()
     image = await docker.images.inspect(name=name)
     assert image

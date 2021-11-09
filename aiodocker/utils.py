@@ -253,6 +253,34 @@ def mktar_from_dockerfile(fileobject: BinaryIO) -> IO:
     return f
 
 
+def mktar_from_directory(fileobject: BinaryIO, directory: str) -> IO:
+    """
+    Create a zipped tar archive from a directory with a Dockerfile
+    **Remember to close the file object**
+    Args:
+        fileobj: a Dockerfile
+        directory: a directory with files
+    Returns:
+        a NamedTemporaryFile() object
+    """
+
+    f = tempfile.NamedTemporaryFile()
+    t = tarfile.open(mode="w:gz", fileobj=f)
+
+    if isinstance(fileobject, BytesIO):
+        dfinfo = tarfile.TarInfo("Dockerfile")
+        dfinfo.size = len(fileobject.getvalue())
+        fileobject.seek(0)
+    else:
+        dfinfo = t.gettarinfo(fileobj=fileobject, arcname="Dockerfile")
+
+    t.addfile(dfinfo, fileobject)
+    t.add(directory, arcname=".")
+    t.close()
+    f.seek(0)
+    return f
+
+
 def compose_auth_header(
     auth: Union[MutableMapping, str, bytes], registry_addr: str = None
 ) -> str:
