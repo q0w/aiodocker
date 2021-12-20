@@ -24,6 +24,7 @@ from .networks import DockerNetwork, DockerNetworks
 from .nodes import DockerSwarmNodes
 from .secrets import DockerSecrets
 from .services import DockerServices
+from .ssh import SSHUnixConnector
 from .swarm import DockerSwarm
 from .system import DockerSystem
 from .tasks import DockerTasks
@@ -64,6 +65,8 @@ class Docker:
     def __init__(
         self,
         url: Optional[str] = None,
+        ssh_url: Optional[str] = None,
+        ssh_options: Optional[Dict[str, str]] = None,
         connector: Optional[aiohttp.BaseConnector] = None,
         session: Optional[aiohttp.ClientSession] = None,
         ssl_context: Optional[ssl.SSLContext] = None,
@@ -107,6 +110,8 @@ class Docker:
             UNIX_PRE_LEN = len(UNIX_PRE)
             WIN_PRE = "npipe://"
             WIN_PRE_LEN = len(WIN_PRE)
+            SSH_PRE = "ssh://"
+            SSH_PRE_LEN = len(SSH_PRE)
             if _rx_tcp_schemes.search(docker_host):
                 if os.environ.get("DOCKER_TLS_VERIFY", "0") == "1":
                     if ssl_context is None:
@@ -117,7 +122,12 @@ class Docker:
                 connector = aiohttp.TCPConnector(ssl=ssl_context)
                 self.docker_host = docker_host
             elif docker_host.startswith(UNIX_PRE):
-                connector = aiohttp.UnixConnector(docker_host[UNIX_PRE_LEN:])
+                if ssh_url:
+                    connector = SSHUnixConnector(
+                        docker_host[UNIX_PRE_LEN:], ssh_url[SSH_PRE_LEN:], ssh_options
+                    )
+                else:
+                    connector = aiohttp.UnixConnector(docker_host[UNIX_PRE_LEN:])
                 # dummy hostname for URL composition
                 self.docker_host = UNIX_PRE + "localhost"
             elif docker_host.startswith(WIN_PRE):
